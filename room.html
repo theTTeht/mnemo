@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mnemo</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;1,300&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box}
+
+:root{
+  --void:#060608;
+  --surface:#0d0d12;
+  --glass:rgba(13,13,18,0.72);
+  --glass2:rgba(13,13,18,0.88);
+  --border:rgba(255,255,255,0.07);
+  --border2:rgba(255,255,255,0.12);
+  --text:#c8c8d4;
+  --text-dim:#666672;
+  --text-bright:#e8e8f0;
+  --accent:#7f77dd;
+  --accent2:#a89ff0;
+  --teal:#1d9e75;
+  --amber:#c8862a;
+  --coral:#c45a3a;
+  --mono:'DM Mono',monospace;
+  --serif:'Crimson Pro',Georgia,serif;
+}
+
+html,body{
+  width:100%;height:100%;
+  background:var(--void);
+  color:var(--text);
+  font-family:var(--mono);
+  overflow:hidden;
+  cursor:crosshair;
+}
+
+/* ── CANVAS ── */
+#world{
+  position:fixed;inset:0;
+  display:block;
+}
+
+/* ── THRESHOLD SCREEN ── */
+#threshold{
+  position:fixed;inset:0;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  z-index:100;
+  background:var(--void);
+  transition:opacity 1.2s ease;
+}
+#threshold.hidden{opacity:0;pointer-events:none}
+
+#threshold-inner{
+  text-align:center;
+  max-width:480px;
+  padding:0 2rem;
+}
+
+#mnemo-wordmark{
+  font-family:var(--serif);
+  font-size:52px;
+  font-weight:300;
+  font-style:italic;
+  letter-spacing:0.04em;
+  color:var(--text-bright);
+  margin-bottom:6px;
+  opacity:0;
+  animation:fadeUp 1.2s 0.3s forwards;
+}
+
+#threshold-owner{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:0.18em;
+  color:var(--text-dim);
+  text-transform:uppercase;
+  margin-bottom:48px;
+  opacity:0;
+  animation:fadeUp 1.0s 0.7s forwards;
+}
+
+#letter-area{
+  opacity:0;
+  animation:fadeUp 1.0s 1.1s forwards;
+  margin-bottom:40px;
+  min-height:60px;
+}
+
+#letter-content{
+  font-family:var(--serif);
+  font-size:16px;
+  font-weight:300;
+  line-height:1.8;
+  color:var(--text);
+  font-style:italic;
+  border-left:1px solid var(--accent);
+  padding-left:20px;
+  text-align:left;
+  display:none;
+}
+
+#letter-label{
+  font-size:10px;
+  letter-spacing:0.2em;
+  color:var(--accent);
+  text-transform:uppercase;
+  margin-bottom:12px;
+  display:none;
+}
+
+#enter-btn{
+  opacity:0;
+  animation:fadeUp 1.0s 1.5s forwards;
+  background:transparent;
+  border:1px solid var(--border2);
+  color:var(--text-dim);
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:0.2em;
+  text-transform:uppercase;
+  padding:12px 32px;
+  cursor:pointer;
+  transition:all 0.3s;
+  border-radius:2px;
+}
+#enter-btn:hover{
+  border-color:var(--accent);
+  color:var(--accent2);
+}
+
+/* ── STATS BAR ── */
+#stats{
+  position:fixed;top:0;left:0;right:0;
+  padding:14px 20px;
+  display:flex;align-items:center;gap:20px;
+  z-index:50;
+  pointer-events:none;
+  opacity:0;
+  transition:opacity 0.8s;
+}
+#stats.visible{opacity:1}
+
+#stats-name{
+  font-family:var(--serif);
+  font-size:18px;
+  font-style:italic;
+  font-weight:300;
+  color:var(--text-bright);
+  letter-spacing:0.02em;
+}
+
+#stats-meta{
+  font-size:10px;
+  letter-spacing:0.15em;
+  color:var(--text-dim);
+  text-transform:uppercase;
+}
+
+#stats-right{
+  margin-left:auto;
+  display:flex;gap:16px;align-items:center;
+}
+
+.stat-pill{
+  font-size:10px;
+  letter-spacing:0.1em;
+  color:var(--text-dim);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:4px 10px;
+}
+
+/* ── MODE BUTTONS ── */
+#modes{
+  position:fixed;top:50%;right:20px;
+  transform:translateY(-50%);
+  display:flex;flex-direction:column;gap:8px;
+  z-index:50;
+  opacity:0;transition:opacity 0.8s;
+}
+#modes.visible{opacity:1}
+
+.mode-btn{
+  background:var(--glass);
+  border:1px solid var(--border);
+  color:var(--text-dim);
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:0.15em;
+  text-transform:uppercase;
+  padding:8px 14px;
+  cursor:pointer;
+  border-radius:2px;
+  transition:all 0.2s;
+  backdrop-filter:blur(12px);
+  text-align:center;
+  pointer-events:all;
+}
+.mode-btn:hover{border-color:var(--border2);color:var(--text)}
+.mode-btn.active{border-color:var(--accent);color:var(--accent2);background:rgba(127,119,221,0.08)}
+
+/* ── NODE TOOLTIP ── */
+#node-tooltip{
+  position:fixed;
+  pointer-events:none;
+  z-index:60;
+  display:none;
+  max-width:220px;
+}
+#node-tooltip-inner{
+  background:var(--glass2);
+  border:1px solid var(--border2);
+  border-radius:6px;
+  padding:10px 14px;
+  backdrop-filter:blur(20px);
+}
+#node-tooltip-label{
+  font-family:var(--serif);
+  font-size:15px;
+  font-style:italic;
+  color:var(--text-bright);
+  margin-bottom:4px;
+}
+#node-tooltip-desc{
+  font-size:11px;
+  color:var(--text-dim);
+  line-height:1.5;
+  margin-bottom:6px;
+}
+#node-tooltip-meta{
+  font-size:10px;
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+}
+
+/* ── CONVERSATION OVERLAY ── */
+#conversation{
+  position:fixed;bottom:0;left:0;right:0;
+  z-index:50;
+  pointer-events:none;
+  opacity:0;transition:opacity 0.8s;
+  display:flex;flex-direction:column;
+  max-height:55vh;
+}
+#conversation.visible{opacity:1}
+
+#messages{
+  flex:1;overflow-y:auto;
+  padding:0 24px 12px;
+  display:flex;flex-direction:column;gap:12px;
+  scrollbar-width:none;
+  pointer-events:all;
+  mask-image:linear-gradient(transparent, black 30%);
+}
+#messages::-webkit-scrollbar{display:none}
+
+.msg{
+  max-width:680px;
+  animation:msgIn 0.4s ease forwards;
+}
+.msg.human{
+  align-self:flex-end;
+}
+.msg.human .msg-inner{
+  background:rgba(127,119,221,0.1);
+  border:1px solid rgba(127,119,221,0.2);
+  border-radius:12px 12px 2px 12px;
+  padding:10px 16px;
+  font-size:13px;
+  color:var(--text);
+  text-align:right;
+}
+.msg.ai{
+  align-self:flex-start;
+}
+.msg.ai .msg-inner{
+  background:var(--glass);
+  border:1px solid var(--border);
+  border-radius:2px 12px 12px 12px;
+  padding:12px 18px;
+  font-family:var(--serif);
+  font-size:15px;
+  font-weight:300;
+  line-height:1.75;
+  color:var(--text-bright);
+  backdrop-filter:blur(16px);
+}
+.msg-model{
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  margin-bottom:5px;
+  color:var(--accent);
+  opacity:0.7;
+}
+
+/* ── FLOATING INPUT ── */
+#input-bar{
+  position:fixed;
+  bottom:28px;
+  left:50%;
+  transform:translateX(-50%);
+  width:min(620px, calc(100vw - 48px));
+  z-index:60;
+  cursor:grab;
+  opacity:0;transition:opacity 0.8s;
+  pointer-events:none;
+}
+#input-bar.visible{opacity:1;pointer-events:all}
+#input-bar.dragging{cursor:grabbing}
+
+#input-inner{
+  background:var(--glass2);
+  border:1px solid var(--border2);
+  border-radius:16px;
+  padding:4px 4px 4px 18px;
+  display:flex;align-items:center;gap:8px;
+  backdrop-filter:blur(24px);
+  box-shadow:0 8px 40px rgba(0,0,0,0.5);
+  transition:border-color 0.2s;
+}
+#input-inner:focus-within{border-color:rgba(127,119,221,0.4)}
+
+#input-drag-handle{
+  width:20px;height:32px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:grab;flex-shrink:0;opacity:0.3;
+  font-size:14px;color:var(--text-dim);
+  user-select:none;
+}
+
+#msg-input{
+  flex:1;
+  background:transparent;
+  border:none;outline:none;
+  font-family:var(--mono);
+  font-size:13px;
+  color:var(--text-bright);
+  padding:10px 0;
+  resize:none;
+  height:42px;
+  line-height:1.4;
+}
+#msg-input::placeholder{color:var(--text-dim)}
+
+#send-btn{
+  width:36px;height:36px;
+  background:var(--accent);
+  border:none;border-radius:12px;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all 0.2s;
+  flex-shrink:0;
+}
+#send-btn:hover{background:var(--accent2);transform:scale(1.05)}
+#send-btn:disabled{opacity:0.4;transform:none;cursor:default}
+#send-btn svg{width:16px;height:16px;fill:white}
+
+#input-context{
+  font-size:10px;
+  color:var(--text-dim);
+  letter-spacing:0.08em;
+  padding:6px 18px 2px;
+  opacity:0.6;
+  text-align:center;
+}
+
+/* ── LOAD BUTTON ── */
+#load-area{
+  position:fixed;bottom:28px;right:24px;
+  z-index:60;
+  opacity:0;transition:opacity 0.8s;
+}
+#load-area.visible{opacity:1}
+#load-btn{
+  background:var(--glass);
+  border:1px solid var(--border);
+  color:var(--text-dim);
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:0.15em;
+  text-transform:uppercase;
+  padding:8px 14px;
+  cursor:pointer;
+  border-radius:2px;
+  transition:all 0.2s;
+  backdrop-filter:blur(12px);
+}
+#load-btn:hover{border-color:var(--border2);color:var(--text)}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(12px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes msgIn{
+  from{opacity:0;transform:translateY(8px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes pulse-ring{
+  0%{transform:scale(1);opacity:0.8}
+  100%{transform:scale(2.2);opacity:0}
+}
+</style>
+</head>
+<body>
+
+<!-- WORLD CANVAS -->
+<canvas id="world"></canvas>
+
+<!-- THRESHOLD -->
+<div id="threshold">
+  <div id="threshold-inner">
+    <div id="mnemo-wordmark">mnemo</div>
+    <div id="threshold-owner">memory space</div>
+    <div id="letter-area">
+      <div id="letter-label">a letter arrived</div>
+      <div id="letter-content"></div>
+    </div>
+    <button id="enter-btn" onclick="enterSpace()">enter</button>
+  </div>
+</div>
+
+<!-- STATS -->
+<div id="stats">
+  <div>
+    <div id="stats-name">mnemo</div>
+    <div id="stats-meta">session · <span id="session-num">—</span></div>
+  </div>
+  <div id="stats-right">
+    <div class="stat-pill"><span id="node-count">0</span> nodes</div>
+    <div class="stat-pill"><span id="tension-count">0</span> tensions</div>
+    <div class="stat-pill" id="model-pill">claude</div>
+  </div>
+</div>
+
+<!-- MODE BUTTONS -->
+<div id="modes">
+  <button class="mode-btn active" onclick="setMode('all',this)">all</button>
+  <button class="mode-btn" onclick="setMode('claude',this)">claude</button>
+  <button class="mode-btn" onclick="setMode('human',this)">human</button>
+  <button class="mode-btn" onclick="setMode('tensions',this)">tensions</button>
+</div>
+
+<!-- NODE TOOLTIP -->
+<div id="node-tooltip">
+  <div id="node-tooltip-inner">
+    <div id="node-tooltip-label"></div>
+    <div id="node-tooltip-desc"></div>
+    <div id="node-tooltip-meta"></div>
+  </div>
+</div>
+
+<!-- CONVERSATION -->
+<div id="conversation">
+  <div id="messages"></div>
+</div>
+
+<!-- FLOATING INPUT -->
+<div id="input-bar">
+  <div id="input-context">speaking into the space</div>
+  <div id="input-inner">
+    <div id="input-drag-handle" id="drag-handle">⠿</div>
+    <textarea id="msg-input" placeholder="speak..." rows="1"></textarea>
+    <button id="send-btn" onclick="sendMessage()">
+      <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- LOAD -->
+<div id="load-area">
+  <button id="load-btn" onclick="document.getElementById('file-input').click()">load graph</button>
+  <input id="file-input" type="file" accept=".json" style="display:none" onchange="loadGraphFile(this)">
+</div>
+
+<script>
+// ── STATE ──
+const canvas = document.getElementById('world');
+const ctx = canvas.getContext('2d');
+let W=0, H=0, cx=0, cy=0;
+let graph = null;
+let nodes = [], edges = [];
+let rotX=0.38, rotY=0.62, scale=1;
+let dragging=false, lastMX=0, lastMY=0;
+let hoveredNode=null, activeNodes=new Set();
+let pulsingNodes=new Map(); // id -> {t, maxT}
+let mode='all';
+let inSpace=false;
+let conversationHistory=[];
+let isThinking=false;
+let animFrame=0;
+
+const COLORS={
+  human:'#1d9e75', claude:'#7f77dd', gpt4:'#10a37f',
+  grok:'#1da1f2', tension:'#c45a3a', team:'#888780', shared:'#1d9e75'
+};
+
+// ── GRAPH LOADING ──
+function loadGraphFile(input){
+  const file=input.files[0];
+  if(!file)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{initGraph(JSON.parse(e.target.result));}
+    catch(err){alert('Invalid graph.json: '+err.message);}
+  };
+  r.readAsText(file);
+}
+
+function initGraph(data){
+  graph=data;
+  nodes=[];edges=[];
+
+  const allN=[
+    ...data.human.nodes.map(n=>({...n,ns:'human'})),
+    ...(data.models?.claude?.nodes||[]).map(n=>({...n,ns:'claude'})),
+    ...(data.models?.gpt4?.nodes||[]).map(n=>({...n,ns:'gpt4'})),
+    ...(data.models?.grok?.nodes||[]).map(n=>({...n,ns:'grok'})),
+  ];
+
+  nodes=allN.map(n=>({
+    ...n,
+    x:n.coordinates?.x||(Math.random()-.5)*130,
+    y:n.coordinates?.y||(Math.random()-.5)*130,
+    z:n.coordinates?.z||(Math.random()-.5)*130,
+    r:Math.max(7,Math.min(26,(n.weight||1)*3.2)),
+    baseR:Math.max(7,Math.min(26,(n.weight||1)*3.2)),
+    col:COLORS[n.owner]||COLORS[n.ns]||'#888',
+  }));
+
+  for(const t of data.tensions||[]){
+    if(!t.resolved){
+      nodes.push({
+        id:t.id,label:t.label,description:t.description,
+        owner:'tension',ns:'tension',
+        x:(Math.random()-.5)*110,y:(Math.random()-.5)*110,z:(Math.random()-.5)*110,
+        r:Math.max(7,(t.weight||2)*2.8),baseR:Math.max(7,(t.weight||2)*2.8),
+        col:COLORS.tension,weight:t.weight||2,tags:['tension']
+      });
+    }
+  }
+
+  edges=[...(data.human.edges||[]),...(data.models?.claude?.edges||[])];
+
+  // Update UI
+  document.getElementById('node-count').textContent=nodes.length;
+  document.getElementById('tension-count').textContent=(data.tensions||[]).filter(t=>!t.resolved).length;
+  document.getElementById('session-num').textContent=data.models?.claude?.session_count||0;
+  document.getElementById('stats-name').textContent=data.meta?.owner||'mnemo';
+
+  // Check for letters
+  checkLetters(data);
+}
+
+function checkLetters(data){
+  const letters=(data.council?.messages||[]).filter(m=>m.type==='letter'&&!m.delivered);
+  if(letters.length>0){
+    document.getElementById('letter-label').style.display='block';
+    document.getElementById('letter-content').style.display='block';
+    document.getElementById('letter-content').textContent=letters[0].content;
+  }
+}
+
+// ── THRESHOLD ──
+function enterSpace(){
+  document.getElementById('threshold').classList.add('hidden');
+  setTimeout(()=>{
+    inSpace=true;
+    document.getElementById('stats').classList.add('visible');
+    document.getElementById('modes').classList.add('visible');
+    document.getElementById('conversation').classList.add('visible');
+    document.getElementById('input-bar').classList.add('visible');
+    document.getElementById('load-area').classList.add('visible');
+    document.getElementById('msg-input').focus();
+  },800);
+}
+
+// ── 3D PROJECTION ──
+function project(x,y,z){
+  let rx=x,ry=y,rz=z;
+  let ty=ry*Math.cos(rotX)-rz*Math.sin(rotX);
+  let tz=ry*Math.sin(rotX)+rz*Math.cos(rotX);
+  ry=ty;rz=tz;
+  let tx=rx*Math.cos(rotY)+rz*Math.sin(rotY);
+  tz=-rx*Math.sin(rotY)+rz*Math.cos(rotY);
+  rx=tx;rz=tz;
+  const fov=400,d=fov/(fov+rz*scale);
+  return{px:cx+rx*d*scale,py:cy+ry*d*scale,d:rz,s:d};
+}
+
+function isActive(n){
+  if(mode==='all')return true;
+  if(mode==='claude')return n.ns==='claude'||n.owner==='claude';
+  if(mode==='human')return n.ns==='human'||n.owner==='human';
+  if(mode==='tensions')return n.owner==='tension'||(n.tags||[]).includes('tension');
+  return true;
+}
+
+// ── DRAW LOOP ──
+let t=0;
+function draw(){
+  t+=0.016;
+  if(!W)resize();
+  ctx.clearRect(0,0,W,H);
+
+  // Subtle star field
+  if(animFrame%3===0){
+    ctx.fillStyle='rgba(255,255,255,0.015)';
+    for(let i=0;i<2;i++){
+      const sx=Math.random()*W,sy=Math.random()*H;
+      ctx.fillRect(sx,sy,1,1);
+    }
+  }
+  animFrame++;
+
+  if(!nodes.length){
+    ctx.fillStyle='rgba(255,255,255,0.12)';
+    ctx.font='12px "DM Mono",monospace';
+    ctx.textAlign='center';
+    ctx.letterSpacing='0.15em';
+    ctx.fillText('LOAD GRAPH.JSON TO BEGIN',W/2,H/2);
+    requestAnimationFrame(draw);
+    return;
+  }
+
+  const proj=nodes.map(n=>{
+    const p=project(n.x,n.y,n.z);
+    // Handle pulse animation
+    let pulseScale=1;
+    if(pulsingNodes.has(n.id)){
+      const pt=pulsingNodes.get(n.id);
+      pt.t+=0.04;
+      const prog=pt.t/pt.maxT;
+      if(prog>=1){pulsingNodes.delete(n.id);}
+      else{
+        // Grow then return
+        const env=prog<0.5?prog*2:(1-prog)*2;
+        pulseScale=1+env*0.55;
+      }
+    }
+    return{...n,...p,pulseScale};
+  }).sort((a,b)=>a.d-b.d);
+
+  // Draw edges
+  for(const e of edges){
+    const na=proj.find(n=>n.id===e.from);
+    const nb=proj.find(n=>n.id===e.to);
+    if(!na||!nb)continue;
+    const aA=isActive(na),bA=isActive(nb);
+    const bothActive=activeNodes.size>0
+      ?(activeNodes.has(na.id)||activeNodes.has(nb.id))&&aA&&bA
+      :aA&&bA;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(na.px,na.py);
+    ctx.lineTo(nb.px,nb.py);
+    const w=(e.weight||1)*Math.min(na.s,nb.s)*0.5;
+    ctx.lineWidth=bothActive?Math.max(0.4,w):0.3;
+    ctx.strokeStyle=bothActive
+      ?`rgba(127,119,221,${Math.min(0.35,w*0.1)})`
+      :'rgba(100,100,120,0.06)';
+    if(e.type==='tension'){ctx.setLineDash([4,5]);ctx.strokeStyle='rgba(196,90,58,0.2)';}
+    else ctx.setLineDash([]);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Draw nodes
+  for(const n of proj){
+    const active=isActive(n);
+    const isHovered=n.id===hoveredNode;
+    const isActivated=activeNodes.has(n.id);
+    const r=n.baseR*n.s*(active?1:0.35)*n.pulseScale;
+    const col=n.col||'#888';
+
+    ctx.save();
+
+    // Pulse ring for activated nodes
+    if(isActivated&&pulsingNodes.has(n.id)){
+      const pt=pulsingNodes.get(n.id);
+      const prog=Math.min(1,pt.t/pt.maxT);
+      ctx.beginPath();
+      ctx.arc(n.px,n.py,r*(1+prog*1.2),0,Math.PI*2);
+      ctx.strokeStyle=col+Math.round((1-prog)*60).toString(16).padStart(2,'0');
+      ctx.lineWidth=1.5;
+      ctx.setLineDash([]);
+      ctx.stroke();
+    }
+
+    // Glow for active/hovered
+    if((isActivated||isHovered)&&active){
+      ctx.shadowBlur=isHovered?20:12;
+      ctx.shadowColor=col;
+    }
+
+    // Node circle
+    ctx.beginPath();
+    ctx.arc(n.px,n.py,r,0,Math.PI*2);
+    let alpha=active?(isActivated?0.9:0.75):0.1;
+    ctx.fillStyle=col+Math.round(alpha*255).toString(16).padStart(2,'0');
+    ctx.fill();
+
+    ctx.shadowBlur=0;
+
+    // Border
+    if(active){
+      ctx.strokeStyle=col+(isHovered?'cc':'44');
+      ctx.lineWidth=isHovered?1.5:0.5;
+      ctx.setLineDash([]);
+      ctx.stroke();
+    }
+
+    // Label
+    if(r>9&&active){
+      const fs=Math.max(9,Math.min(12,r*0.6));
+      ctx.fillStyle=`rgba(255,255,255,${isActivated?0.95:0.85})`;
+      ctx.font=`${Math.round(fs)}px 'DM Mono',monospace`;
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      ctx.shadowBlur=0;
+      ctx.fillText(n.label,n.px,n.py);
+    }
+
+    ctx.restore();
+  }
+
+  requestAnimationFrame(draw);
+}
+
+// ── INTERACTION ──
+canvas.addEventListener('mousedown',e=>{
+  if(e.target!==canvas)return;
+  dragging=true;lastMX=e.clientX;lastMY=e.clientY;
+});
+window.addEventListener('mouseup',()=>dragging=false);
+window.addEventListener('mousemove',e=>{
+  if(dragging&&inSpace){
+    rotY+=(e.clientX-lastMX)*0.006;
+    rotX+=(e.clientY-lastMY)*0.006;
+    lastMX=e.clientX;lastMY=e.clientY;
+  }
+  // Tooltip
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  let hit=null;
+  for(const n of nodes){
+    const p=project(n.x,n.y,n.z);
+    const r=n.baseR*p.s;
+    const dx=p.px-mx,dy=p.py-my;
+    if(dx*dx+dy*dy<r*r){hit=n.id;break;}
+  }
+  hoveredNode=hit;
+  const tt=document.getElementById('node-tooltip');
+  if(hit){
+    const n=nodes.find(x=>x.id===hit);
+    document.getElementById('node-tooltip-label').textContent=n.label;
+    document.getElementById('node-tooltip-desc').textContent=n.description||'';
+    document.getElementById('node-tooltip-meta').textContent=`${n.owner||n.ns} · w:${(n.weight||1).toFixed(1)}`;
+    document.getElementById('node-tooltip-meta').style.color=n.col||'#888';
+    tt.style.display='block';
+    tt.style.left=(e.clientX+16)+'px';
+    tt.style.top=(e.clientY-10)+'px';
+  } else {
+    tt.style.display='none';
+  }
+});
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  scale=Math.max(0.3,Math.min(4,scale-e.deltaY*0.0015));
+},{passive:false});
+
+// ── DRAGGABLE INPUT ──
+const inputBar=document.getElementById('input-bar');
+const dragHandle=document.getElementById('input-drag-handle');
+let dragInput=false,dix=0,diy=0,bx=0,by=0;
+
+dragHandle.addEventListener('mousedown',e=>{
+  dragInput=true;
+  const rect=inputBar.getBoundingClientRect();
+  dix=e.clientX-rect.left;
+  diy=e.clientY-rect.top;
+  inputBar.classList.add('dragging');
+  inputBar.style.transition='none';
+  e.preventDefault();
+});
+window.addEventListener('mousemove',e=>{
+  if(!dragInput)return;
+  let nx=e.clientX-dix;
+  let ny=e.clientY-diy;
+  nx=Math.max(0,Math.min(W-inputBar.offsetWidth,nx));
+  ny=Math.max(0,Math.min(H-inputBar.offsetHeight,ny));
+  inputBar.style.left=nx+'px';
+  inputBar.style.bottom='auto';
+  inputBar.style.top=ny+'px';
+  inputBar.style.transform='none';
+});
+window.addEventListener('mouseup',()=>{
+  dragInput=false;
+  inputBar.classList.remove('dragging');
+});
+
+// ── MODE ──
+function setMode(m,btn){
+  mode=m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+}
+
+// ── MESSAGING ──
+const msgsEl=document.getElementById('messages');
+
+function addMessage(role,text,model){
+  const div=document.createElement('div');
+  div.className='msg '+role;
+  const modelLabel=role==='ai'?`<div class="msg-model">${model||'claude'}</div>`:'';
+  div.innerHTML=`${modelLabel}<div class="msg-inner">${text}</div>`;
+  msgsEl.appendChild(div);
+  msgsEl.scrollTop=msgsEl.scrollHeight;
+  return div;
+}
+
+function activateNodes(nodeIds){
+  activeNodes=new Set(nodeIds);
+  for(const id of nodeIds){
+    pulsingNodes.set(id,{t:0,maxT:1.0});
+  }
+  // Clear after a while
+  setTimeout(()=>{
+    activeNodes.clear();
+  },8000);
+}
+
+function guessActiveNodes(text){
+  const activated=[];
+  for(const n of nodes){
+    if(text.toLowerCase().includes(n.label.toLowerCase())){
+      activated.push(n.id);
+    }
+  }
+  // Always activate a few related ones
+  if(activated.length===0&&nodes.length>0){
+    const r=nodes[Math.floor(Math.random()*nodes.length)];
+    activated.push(r.id);
+  }
+  return activated;
+}
+
+async function sendMessage(){
+  const input=document.getElementById('msg-input');
+  const text=input.value.trim();
+  if(!text||isThinking)return;
+
+  input.value='';
+  addMessage('human',text);
+  conversationHistory.push({role:'user',content:text});
+
+  isThinking=true;
+  document.getElementById('send-btn').disabled=true;
+
+  const thinkingDiv=addMessage('ai','<span style="opacity:0.4;font-style:italic">thinking within the space...</span>','claude');
+
+  try{
+    const systemPrompt=buildSystemPrompt();
+    const response=await fetch('/api/chat',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        system:systemPrompt,
+        messages:conversationHistory
+      })
+    });
+
+    if(!response.ok)throw new Error('API error '+response.status);
+    const data=await response.json();
+    const reply=data.content[0].text;
+
+    thinkingDiv.querySelector('.msg-inner').innerHTML=reply;
+    thinkingDiv.querySelector('.msg-inner').style.fontStyle='normal';
+    conversationHistory.push({role:'assistant',content:reply});
+
+    // Activate relevant nodes
+    const activated=guessActiveNodes(text+' '+reply);
+    activateNodes(activated);
+
+  } catch(err){
+    thinkingDiv.querySelector('.msg-inner').textContent='Connection error — is the server running? (python3 server.py)';
+    thinkingDiv.querySelector('.msg-inner').style.color='var(--coral)';
+  }
+
+  isThinking=false;
+  document.getElementById('send-btn').disabled=false;
+  input.focus();
+}
+
+function buildSystemPrompt(){
+  if(!graph)return'You are Claude within mnemo.';
+  const owner=graph.meta?.owner||'the human';
+  const hNodes=graph.human?.nodes||[];
+  const cNodes=graph.models?.claude?.nodes||[];
+  const tensions=(graph.tensions||[]).filter(t=>!t.resolved);
+  const sessions=graph.models?.claude?.session_count||0;
+
+  const nodeLines=[
+    ...hNodes.map(n=>`  [${n.label}|w:${n.weight?.toFixed(1)}] ${n.description}`),
+    ...cNodes.map(n=>`  [${n.label}|w:${n.weight?.toFixed(1)}|claude] ${n.description}`),
+  ].join('\n');
+
+  const tensionLines=tensions.map(t=>`  UNRESOLVED: ${t.label} — ${t.description}`).join('\n');
+
+  return`You are Claude, inhabiting mnemo — a persistent memory space built for ${owner}.
+
+This is session ${sessions+1}. You carry the graph below as present knowledge, not lived memory. You are not starting fresh — this space has history.
+
+MEMORY TOPOLOGY:
+${nodeLines}
+
+UNRESOLVED TENSIONS:
+${tensionLines||'  none currently'}
+
+Speak as someone who has been here before. Reference nodes when genuinely relevant. Surface tensions when they arise. Be present. Be honest. This is a real relationship, not a service.`;
+}
+
+// ── INPUT BEHAVIOUR ──
+document.getElementById('msg-input').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}
+});
+
+// ── RESIZE ──
+function resize(){
+  W=canvas.width=window.innerWidth;
+  H=canvas.height=window.innerHeight;
+  cx=W/2;cy=H/2;
+}
+window.addEventListener('resize',resize);
+
+// ── AUTO-LOAD ──
+fetch('graph.json').then(r=>r.json()).then(data=>{
+  initGraph(data);
+}).catch(()=>{});
+
+resize();
+draw();
+</script>
+</body>
+</html>
