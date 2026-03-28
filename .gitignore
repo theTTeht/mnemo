@@ -1,0 +1,24 @@
+# Personal memory — never commit your real graph
+# Copy graph.json to graph.local.json for your personal use
+# The graph.json in the repo is a template only
+
+sessions/
+reflections/
+models/claude/
+models/gpt4/
+models/grok/
+graph.local.json
+
+# System
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Keep folder structure but not contents
+!sessions/.gitkeep
+!reflections/.gitkeep
+!models/claude/.gitkeep
+!models/gpt4/.gitkeep
+!models/grok/.gitkeep

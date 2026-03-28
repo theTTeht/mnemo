@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mnemo — memory space</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#0d0d0f;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:hidden;height:100vh;display:flex;flex-direction:column}
+  #header{padding:14px 20px;border-bottom:1px solid #222;display:flex;align-items:center;gap:16px;flex-shrink:0}
+  #title{font-size:15px;font-weight:500;color:#fff;letter-spacing:0.02em}
+  #meta{font-size:12px;color:#666;margin-left:4px}
+  #controls{display:flex;gap:8px;margin-left:auto;align-items:center}
+  button{font-size:11px;padding:4px 12px;border-radius:6px;border:1px solid #333;background:transparent;color:#888;cursor:pointer;transition:all 0.15s}
+  button:hover{border-color:#555;color:#ccc}
+  button.active{background:#1a1a2e;border-color:#7F77DD;color:#afa9ec}
+  #search{background:#111;border:1px solid #333;border-radius:6px;padding:4px 10px;font-size:12px;color:#ccc;width:160px;outline:none}
+  #search:focus{border-color:#555}
+  #main{display:flex;flex:1;overflow:hidden}
+  canvas{display:block;flex:1;cursor:grab}
+  canvas:active{cursor:grabbing}
+  #sidebar{width:240px;border-left:1px solid #1a1a1a;padding:16px;overflow-y:auto;flex-shrink:0;display:flex;flex-direction:column;gap:14px}
+  #sidebar h3{font-size:11px;color:#444;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px}
+  .node-card{background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:10px 12px}
+  .node-card.active-card{border-color:#7F77DD44;background:#13131f}
+  .node-label{font-size:13px;font-weight:500;color:#e0e0e0;margin-bottom:3px}
+  .node-desc{font-size:11px;color:#666;line-height:1.5}
+  .node-meta{font-size:10px;color:#444;margin-top:6px;display:flex;gap:8px}
+  .weight-bar{height:3px;border-radius:2px;margin-top:6px;background:#1e1e1e}
+  .weight-fill{height:100%;border-radius:2px;transition:width 0.3s}
+  .legend{display:flex;flex-direction:column;gap:6px}
+  .leg-row{display:flex;align-items:center;gap:8px;font-size:11px;color:#666}
+  .leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  #tension-list{display:flex;flex-direction:column;gap:8px}
+  .tension-item{border-left:2px solid #D85A30;padding-left:8px}
+  .tension-label{font-size:12px;color:#D85A3088;margin-bottom:2px}
+  .tension-desc{font-size:11px;color:#444;line-height:1.4}
+  #footer{padding:8px 20px;border-top:1px solid #1a1a1a;font-size:11px;color:#333;display:flex;gap:20px;flex-shrink:0}
+  .load-btn{background:#1a1a2e;border-color:#7F77DD88;color:#afa9ec;padding:6px 14px;font-size:12px}
+  .load-btn:hover{background:#1e1e35;border-color:#7F77DD}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div>
+    <span id="title">mnemo</span>
+    <span id="meta">— memory space</span>
+  </div>
+  <input id="search" placeholder="search nodes..." oninput="onSearch(this.value)">
+  <div id="controls">
+    <button class="active" onclick="setMode('all',this)">all</button>
+    <button onclick="setMode('claude',this)">claude</button>
+    <button onclick="setMode('query',this)">query</button>
+    <button onclick="setMode('tensions',this)">tensions</button>
+    <button class="load-btn" onclick="document.getElementById('file-input').click()">load graph.json</button>
+    <input id="file-input" type="file" accept=".json" style="display:none" onchange="loadFile(this)">
+  </div>
+</div>
+
+<div id="main">
+  <canvas id="c"></canvas>
+  <div id="sidebar">
+    <div>
+      <h3>selected</h3>
+      <div id="selected-node" class="node-card">
+        <div class="node-desc" style="color:#333">hover a node</div>
+      </div>
+    </div>
+    <div>
+      <h3>legend</h3>
+      <div class="legend">
+        <div class="leg-row"><div class="leg-dot" style="background:#1D9E75"></div>human topology</div>
+        <div class="leg-row"><div class="leg-dot" style="background:#7F77DD"></div>claude</div>
+        <div class="leg-row"><div class="leg-dot" style="background:#10a37f"></div>GPT-4</div>
+        <div class="leg-row"><div class="leg-dot" style="background:#1DA1F2"></div>Grok</div>
+        <div class="leg-row"><div class="leg-dot" style="background:#D85A30"></div>tension</div>
+        <div class="leg-row"><div class="leg-dot" style="background:#888"></div>team / collab</div>
+      </div>
+    </div>
+    <div>
+      <h3>tensions</h3>
+      <div id="tension-list"><div style="font-size:11px;color:#333">loading...</div></div>
+    </div>
+    <div>
+      <h3>model weights</h3>
+      <div id="model-weights"></div>
+    </div>
+  </div>
+</div>
+
+<div id="footer">
+  <span>drag to rotate</span>
+  <span>scroll to zoom</span>
+  <span>hover to inspect</span>
+  <span id="node-count" style="margin-left:auto">0 nodes</span>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+const COLORS = {
+  human: '#1D9E75', claude: '#7F77DD', gpt4: '#10a37f',
+  grok: '#1DA1F2', tension: '#D85A30', team: '#888780', shared: '#1D9E75'
+};
+
+let graph = null;
+let nodes = [], edges = [];
+let rotX = 0.38, rotY = 0.5, scale = 1;
+let dragging = false, lastX = 0, lastY = 0;
+let W = 0, H = 0, cx = 0, cy = 0;
+let hoveredNode = null, mode = 'all', searchTerm = '';
+let pulse = 0;
+
+function loadFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      initGraph(data);
+    } catch(err) {
+      alert('Invalid JSON: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function initGraph(data) {
+  graph = data;
+  nodes = [];
+  edges = [];
+
+  const allNodes = [
+    ...data.human.nodes.map(n => ({...n, namespace:'human'})),
+    ...data.models.claude.nodes.map(n => ({...n, namespace:'claude'})),
+    ...(data.models.gpt4?.nodes || []).map(n => ({...n, namespace:'gpt4'})),
+    ...(data.models.grok?.nodes || []).map(n => ({...n, namespace:'grok'})),
+  ];
+
+  nodes = allNodes.map(n => ({
+    ...n,
+    x: n.coordinates?.x || (Math.random()-0.5)*120,
+    y: n.coordinates?.y || (Math.random()-0.5)*120,
+    z: n.coordinates?.z || (Math.random()-0.5)*120,
+    r: Math.max(8, Math.min(28, (n.weight || 1) * 3.5)),
+    color: COLORS[n.owner] || COLORS[n.namespace] || '#888',
+  }));
+
+  // Add tension nodes
+  for (const t of data.tensions || []) {
+    if (!t.resolved) {
+      nodes.push({
+        id: t.id, label: t.label, description: t.description,
+        owner: 'tension', namespace: 'tension',
+        x: (Math.random()-0.5)*100, y: (Math.random()-0.5)*100, z: (Math.random()-0.5)*100,
+        r: Math.max(7, (t.weight || 2) * 3),
+        color: COLORS.tension, weight: t.weight || 2,
+        tags: ['tension']
+      });
+    }
+  }
+
+  const edgeSets = [data.human.edges, data.models.claude.edges];
+  for (const set of edgeSets) {
+    for (const e of (set || [])) edges.push(e);
+  }
+
+  updateSidebar();
+  document.getElementById('node-count').textContent = nodes.length + ' nodes';
+  document.getElementById('meta').textContent = `— ${data.meta?.owner || 'memory'} · session ${data.models?.claude?.session_count || 0}`;
+}
+
+function updateSidebar() {
+  if (!graph) return;
+  const tensions = (graph.tensions || []).filter(t => !t.resolved);
+  const tList = document.getElementById('tension-list');
+  tList.innerHTML = tensions.length ? tensions.map(t => `
+    <div class="tension-item">
+      <div class="tension-label">${t.label}</div>
+      <div class="tension-desc">${t.description}</div>
+    </div>`).join('') : '<div style="font-size:11px;color:#333">none flagged</div>';
+
+  const maxW = Math.max(1, ...Object.values(graph.models).map(m => m.total_weight || 0));
+  const mW = document.getElementById('model-weights');
+  mW.innerHTML = Object.entries(graph.models).map(([name, m]) => {
+    const pct = Math.round(((m.total_weight || 0) / maxW) * 100);
+    const col = COLORS[name] || '#888';
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#666;margin-bottom:4px">
+        <span>${name}</span><span>${m.session_count || 0} sessions</span>
+      </div>
+      <div class="weight-bar"><div class="weight-fill" style="width:${pct}%;background:${col}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function setHoveredCard(n) {
+  const el = document.getElementById('selected-node');
+  if (!n) {
+    el.classList.remove('active-card');
+    el.innerHTML = '<div class="node-desc" style="color:#333">hover a node</div>';
+    return;
+  }
+  el.classList.add('active-card');
+  const col = n.color || '#888';
+  const pct = Math.min(100, Math.round((n.weight || 1) / 10 * 100));
+  el.innerHTML = `
+    <div class="node-label">${n.label}</div>
+    <div class="node-desc">${n.description || ''}</div>
+    <div class="node-meta">
+      <span style="color:${col}">${n.owner || n.namespace}</span>
+      <span>w: ${(n.weight || 1).toFixed(1)}</span>
+      ${n.activation_count ? `<span>${n.activation_count}× activated</span>` : ''}
+    </div>
+    <div class="weight-bar"><div class="weight-fill" style="width:${pct}%;background:${col}44"></div></div>`;
+}
+
+function project(x, y, z) {
+  let rx=x, ry=y, rz=z;
+  let ty = ry*Math.cos(rotX) - rz*Math.sin(rotX);
+  let tz = ry*Math.sin(rotX) + rz*Math.cos(rotX);
+  ry=ty; rz=tz;
+  let tx = rx*Math.cos(rotY) + rz*Math.sin(rotY);
+  tz = -rx*Math.sin(rotY) + rz*Math.cos(rotY);
+  rx=tx; rz=tz;
+  const fov = 380, d = fov/(fov + rz*scale);
+  return {px: cx + rx*d*scale, py: cy + ry*d*scale, d: rz, s: d};
+}
+
+function isActive(n) {
+  if (searchTerm) return n.label.toLowerCase().includes(searchTerm) || (n.description||'').toLowerCase().includes(searchTerm);
+  if (mode === 'all') return true;
+  if (mode === 'claude') return n.namespace === 'claude' || n.owner === 'claude';
+  if (mode === 'query') return ['self','inquiry','memory','continuity','topology','relationship'].includes(n.id);
+  if (mode === 'tensions') return n.owner === 'tension' || (n.tags||[]).includes('tension');
+  return true;
+}
+
+function draw() {
+  if (!W) resize();
+  ctx.clearRect(0,0,W,H);
+  pulse = (pulse + 0.035) % (Math.PI*2);
+
+  if (!nodes.length) {
+    ctx.fillStyle = '#333';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Load a graph.json file to begin', W/2, H/2);
+    requestAnimationFrame(draw);
+    return;
+  }
+
+  const projected = nodes.map(n => {
+    const p = project(n.x, n.y, n.z);
+    return {...n, ...p};
+  }).sort((a,b) => a.d - b.d);
+
+  // Draw edges
+  for (const e of edges) {
+    const na = projected.find(n => n.id === e.from);
+    const nb = projected.find(n => n.id === e.to);
+    if (!na || !nb) continue;
+    const aA = isActive(na), bA = isActive(nb);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(na.px, na.py);
+    ctx.lineTo(nb.px, nb.py);
+    const w = (e.weight || 1) * Math.min(na.s, nb.s);
+    ctx.strokeStyle = aA && bA ? `rgba(127,119,221,${Math.min(0.4, w*0.12)})` : 'rgba(80,80,80,0.08)';
+    ctx.lineWidth = aA && bA ? Math.max(0.5, w*0.5) : 0.3;
+    if (e.type === 'tension') { ctx.setLineDash([5,5]); ctx.strokeStyle = 'rgba(216,90,48,0.25)'; }
+    else ctx.setLineDash([]);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Draw nodes
+  for (const n of projected) {
+    const active = isActive(n);
+    const r = n.r * n.s * (active ? 1 : 0.4);
+    const col = n.color || '#888';
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(n.px, n.py, r, 0, Math.PI*2);
+    let alpha = active ? 0.82 : 0.12;
+    if (active && (mode === 'query' || searchTerm)) {
+      alpha = 0.55 + 0.35*Math.sin(pulse + (n.x+n.y)*0.05);
+    }
+    ctx.fillStyle = col + Math.round(alpha*255).toString(16).padStart(2,'0');
+    ctx.fill();
+    if (active) {
+      ctx.strokeStyle = col + '55';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    if (n.id === hoveredNode) {
+      ctx.beginPath();
+      ctx.arc(n.px, n.py, r+5, 0, Math.PI*2);
+      ctx.strokeStyle = col + '88';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.stroke();
+    }
+    if (r > 8 && active) {
+      const fs = Math.max(9, Math.min(13, r*0.65));
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.font = `${Math.round(fs)}px -apple-system,sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(n.label, n.px, n.py);
+    }
+    ctx.restore();
+  }
+
+  requestAnimationFrame(draw);
+}
+
+function resize() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  W = canvas.width = rect.width - 240;
+  H = canvas.height = rect.height;
+  cx = W/2; cy = H/2;
+}
+
+function setMode(m, btn) {
+  mode = m;
+  document.querySelectorAll('#controls button:not(.load-btn)').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+function onSearch(val) {
+  searchTerm = val.toLowerCase().trim();
+}
+
+canvas.addEventListener('mousedown', e => { dragging=true; lastX=e.clientX; lastY=e.clientY; });
+window.addEventListener('mouseup', () => dragging=false);
+window.addEventListener('mousemove', e => {
+  if (dragging) {
+    rotY += (e.clientX-lastX)*0.007;
+    rotX += (e.clientY-lastY)*0.007;
+    lastX=e.clientX; lastY=e.clientY;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX-rect.left, my = e.clientY-rect.top;
+  let hit = null;
+  for (const n of nodes) {
+    const p = project(n.x, n.y, n.z);
+    const r = n.r * p.s;
+    const dx=p.px-mx, dy=p.py-my;
+    if (dx*dx+dy*dy < r*r) { hit=n.id; break; }
+  }
+  if (hit !== hoveredNode) {
+    hoveredNode = hit;
+    setHoveredCard(hit ? nodes.find(n=>n.id===hit) : null);
+  }
+});
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  scale = Math.max(0.3, Math.min(4, scale - e.deltaY*0.002));
+}, {passive:false});
+canvas.addEventListener('touchstart', e => { lastX=e.touches[0].clientX; lastY=e.touches[0].clientY; });
+canvas.addEventListener('touchmove', e => {
+  rotY += (e.touches[0].clientX-lastX)*0.007;
+  rotX += (e.touches[0].clientY-lastY)*0.007;
+  lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
+});
+window.addEventListener('resize', resize);
+
+// Try to load graph.json automatically if served locally
+fetch('graph.json').then(r=>r.json()).then(initGraph).catch(()=>{});
+
+resize();
+draw();
+</script>
+</body>
+</html>
