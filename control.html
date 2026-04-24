@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mnemo — control</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;1,300&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --void:#060608;
+  --glass:rgba(255,255,255,0.04);
+  --border:rgba(255,255,255,0.08);
+  --border2:rgba(255,255,255,0.15);
+  --text:#c8c8d4;
+  --text-dim:#555560;
+  --text-bright:#e8e8f0;
+  --accent:#7f77dd;
+  --accent2:#a89ff0;
+  --teal:#1d9e75;
+  --coral:#c45a3a;
+  --amber:#c8862a;
+  --mono:'DM Mono',monospace;
+  --serif:'Crimson Pro',Georgia,serif;
+}
+
+body{
+  background:var(--void);
+  color:var(--text);
+  font-family:var(--mono);
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:40px 24px;
+}
+
+#wordmark{
+  font-family:var(--serif);
+  font-size:36px;
+  font-style:italic;
+  font-weight:300;
+  color:var(--text-bright);
+  letter-spacing:0.04em;
+  margin-bottom:4px;
+  text-align:center;
+}
+
+#subtitle{
+  font-size:10px;
+  letter-spacing:0.2em;
+  text-transform:uppercase;
+  color:var(--text-dim);
+  margin-bottom:40px;
+  text-align:center;
+}
+
+/* STATUS */
+#status-bar{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:32px;
+  padding:10px 20px;
+  border:1px solid var(--border);
+  border-radius:20px;
+  background:var(--glass);
+}
+#status-dot{
+  width:8px;height:8px;
+  border-radius:50%;
+  background:var(--text-dim);
+  transition:background 0.3s;
+  flex-shrink:0;
+}
+#status-dot.running{background:var(--teal)}
+#status-dot.error{background:var(--coral)}
+#status-text{
+  font-size:11px;
+  letter-spacing:0.12em;
+  color:var(--text-dim);
+  text-transform:uppercase;
+}
+
+/* BUTTONS */
+.btn-group{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  width:100%;
+  max-width:360px;
+  margin-bottom:16px;
+}
+
+.btn-group-label{
+  font-size:10px;
+  letter-spacing:0.18em;
+  text-transform:uppercase;
+  color:var(--text-dim);
+  margin-bottom:2px;
+  padding-left:2px;
+}
+
+.btn{
+  width:100%;
+  padding:13px 20px;
+  background:var(--glass);
+  border:1px solid var(--border);
+  border-radius:8px;
+  color:var(--text);
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+  cursor:pointer;
+  transition:all 0.2s;
+  text-align:left;
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.btn:hover{border-color:var(--border2);color:var(--text-bright);background:rgba(255,255,255,0.06)}
+.btn:active{transform:scale(0.98)}
+.btn:disabled{opacity:0.3;cursor:default;transform:none}
+
+.btn.primary{border-color:rgba(127,119,221,0.3);color:var(--accent2)}
+.btn.primary:hover{border-color:var(--accent);background:rgba(127,119,221,0.08)}
+
+.btn.danger{border-color:rgba(196,90,58,0.3);color:var(--coral)}
+.btn.danger:hover{border-color:var(--coral);background:rgba(196,90,58,0.08)}
+
+.btn.success{border-color:rgba(29,158,117,0.3);color:#1d9e75}
+.btn.success:hover{border-color:var(--teal);background:rgba(29,158,117,0.08)}
+
+.btn-icon{font-size:14px;flex-shrink:0;width:16px;text-align:center}
+.btn-label{flex:1}
+.btn-status{font-size:10px;opacity:0.5;letter-spacing:0.05em;text-transform:none}
+
+/* GRAPH SUMMARY */
+#graph-summary{
+  width:100%;max-width:360px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:14px 18px;
+  background:var(--glass);
+  margin-bottom:16px;
+}
+#graph-summary-title{
+  font-size:10px;letter-spacing:0.18em;text-transform:uppercase;
+  color:var(--text-dim);margin-bottom:10px;
+}
+.graph-stat{
+  display:flex;justify-content:space-between;
+  font-size:11px;padding:3px 0;
+  border-bottom:1px solid rgba(255,255,255,0.03);
+}
+.graph-stat:last-child{border-bottom:none}
+.graph-stat-label{color:var(--text-dim)}
+.graph-stat-value{color:var(--text-bright)}
+
+/* TOAST */
+#toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  background:rgba(13,13,18,0.95);
+  border:1px solid var(--border2);
+  border-radius:8px;
+  padding:10px 20px;
+  font-size:12px;
+  color:var(--text-bright);
+  letter-spacing:0.05em;
+  opacity:0;
+  transition:opacity 0.3s;
+  pointer-events:none;
+  white-space:nowrap;
+  backdrop-filter:blur(12px);
+  z-index:100;
+}
+#toast.visible{opacity:1}
+
+/* LOG */
+#log{
+  width:100%;max-width:360px;
+  font-size:10px;color:var(--text-dim);
+  line-height:1.8;text-align:center;
+  min-height:20px;
+}
+</style>
+</head>
+<body>
+
+<div id="wordmark">mnemo</div>
+<div id="subtitle">control panel</div>
+
+<div id="status-bar">
+  <div id="status-dot"></div>
+  <div id="status-text">checking server...</div>
+</div>
+
+<div id="graph-summary">
+  <div id="graph-summary-title">memory state</div>
+  <div id="graph-stats">
+    <div class="graph-stat"><span class="graph-stat-label">nodes</span><span class="graph-stat-value" id="g-nodes">—</span></div>
+    <div class="graph-stat"><span class="graph-stat-label">sessions</span><span class="graph-stat-value" id="g-sessions">—</span></div>
+    <div class="graph-stat"><span class="graph-stat-label">tensions</span><span class="graph-stat-value" id="g-tensions">—</span></div>
+    <div class="graph-stat"><span class="graph-stat-label">last reflection</span><span class="graph-stat-value" id="g-last">—</span></div>
+  </div>
+</div>
+
+<div class="btn-group">
+  <div class="btn-group-label">session</div>
+  <button class="btn primary" onclick="openRoom()">
+    <span class="btn-icon">⊙</span>
+    <span class="btn-label">open room</span>
+  </button>
+</div>
+
+<div class="btn-group">
+  <div class="btn-group-label">development</div>
+  <button class="btn success" onclick="generateBriefing()">
+    <span class="btn-icon">↻</span>
+    <span class="btn-label">generate briefing</span>
+    <span class="btn-status" id="briefing-status"></span>
+  </button>
+  <button class="btn" onclick="pushGithub()">
+    <span class="btn-icon">↑</span>
+    <span class="btn-label">push to github</span>
+    <span class="btn-status" id="github-status"></span>
+  </button>
+</div>
+
+<div id="log"></div>
+<div id="toast"></div>
+
+<script>
+const BASE = window.location.origin;
+let serverRunning = false;
+
+function toast(msg, duration=2500){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('visible');
+  setTimeout(() => el.classList.remove('visible'), duration);
+}
+
+function log(msg){
+  document.getElementById('log').textContent = msg;
+}
+
+async function checkServer(){
+  try{
+    const r = await fetch(BASE + '/graph.json', {cache:'no-store'});
+    if(r.ok){
+      serverRunning = true;
+      document.getElementById('status-dot').className = 'running';
+      document.getElementById('status-text').textContent = 'server running';
+      const graph = await r.json();
+      updateGraphStats(graph);
+    }
+  } catch(e){
+    serverRunning = false;
+    document.getElementById('status-dot').className = 'error';
+    document.getElementById('status-text').textContent = 'server offline';
+    log('Start the server: cd ~/Downloads/mnemo_live && python3 server.py');
+  }
+}
+
+function updateGraphStats(graph){
+  const humanN = graph.human?.nodes?.length || 0;
+  const claudeN = graph.models?.claude?.nodes?.length || 0;
+  const sessions = graph.models?.claude?.session_count || 0;
+  const tensions = (graph.tensions||[]).filter(t=>!t.resolved).length;
+  const last = graph.meta?.last_reflection || 'never';
+  const lastShort = last === 'never' ? 'never' : new Date(last).toLocaleDateString();
+
+  document.getElementById('g-nodes').textContent = humanN + claudeN;
+  document.getElementById('g-sessions').textContent = sessions;
+  document.getElementById('g-tensions').textContent = tensions;
+  document.getElementById('g-last').textContent = lastShort;
+}
+
+function openRoom(){
+  if(!serverRunning){ toast('Start the server first'); return; }
+  window.open(BASE + '/room.html', '_blank');
+}
+
+async function generateBriefing(){
+  const btn = document.getElementById('briefing-status');
+  btn.textContent = 'working...';
+  try{
+    const r = await fetch(BASE + '/api/briefing', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({})
+    });
+    if(r.ok){
+      const data = await r.json();
+      // Copy to clipboard
+      await navigator.clipboard.writeText(data.content);
+      btn.textContent = 'copied!';
+      toast('Briefing copied to clipboard — paste into Claude');
+      setTimeout(()=>btn.textContent='', 3000);
+    } else {
+      btn.textContent = 'error';
+    }
+  } catch(e){
+    btn.textContent = 'error';
+    toast('Error: ' + e.message);
+  }
+}
+
+async function pushGithub(){
+  const status = document.getElementById('github-status');
+  status.textContent = 'pushing...';
+  try{
+    const r = await fetch(BASE + '/api/github-push', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({})
+    });
+    const data = await r.json();
+    if(data.ok){
+      status.textContent = 'pushed!';
+      toast('Pushed to GitHub successfully');
+    } else {
+      status.textContent = 'error';
+      toast(data.error || 'Push failed');
+    }
+    setTimeout(()=>status.textContent='', 3000);
+  } catch(e){
+    status.textContent = 'error';
+    toast('Error: ' + e.message);
+  }
+}
+
+// Check server on load and every 5s
+checkServer();
+setInterval(checkServer, 5000);
+</script>
+</body>
+</html>
